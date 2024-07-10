@@ -1,6 +1,11 @@
-// Require `checkUsernameFree`, `checkUsernameExists` and `checkPasswordLength`
-// middleware functions from `auth-middleware.js`. You will need them here!
-
+const router = require('express').Router();
+const User = require('../users/users-model');
+const bcrypt = require('bcryptjs');
+const {
+  checkUsernameFree,
+  checkUsernameExists,
+  checkPasswordLength
+} = require('./auth-middleware');
 
 /**
   1 [POST] /api/auth/register { "username": "sue", "password": "1234" }
@@ -24,6 +29,23 @@
     "message": "Password must be longer than 3 chars"
   }
  */
+  router.post('/register', checkPasswordLength, checkUsernameFree, async (req, res, next) => {
+    try {
+      const { username, password } = req.body;
+      const hash = bcrypt.hashSync(password, 8); // Hash the password
+
+      // Add the user to the database with the hashed password
+      const user = await User.add({ username, password: hash });
+
+      res.status(200).json(user);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+
+
+
 
 
 /**
@@ -41,6 +63,18 @@
     "message": "Invalid credentials"
   }
  */
+  router.post('/login', checkUsernameExists, (req, res, next) => {
+    const { password } = req.body;
+    if (bcrypt.compareSync(password, req.user.password)) {
+      // Set session only if authentication is successful
+      req.session.user = req.user; // Store user information in the session
+      res.json({status: 200, message: `Welcome ${req.user.username}!`});
+    } else {
+      next({ status: 401, message: "Invalid credentials" });
+    }
+  });
+
+
 
 
 /**
@@ -59,5 +93,19 @@
   }
  */
 
- 
+  router.get('/logout', (req, res, next) => {
+    if (req.session.user) {
+      req.session.destroy(err => {
+        if (err) {
+          next(err);
+        } else {
+          res.json({message: "logged out"});
+        }
+      });
+    } else {
+      res.json({message: "no session"});
+    }
+})
+
 // Don't forget to add the router to the `exports` object so it can be required in other modules
+module.exports = router;
